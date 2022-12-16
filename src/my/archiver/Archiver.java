@@ -1,8 +1,8 @@
 package my.archiver;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 
 public class Archiver {
@@ -10,42 +10,74 @@ public class Archiver {
     private static final int SEVEN_BYTES_MASK = 127;
     private static final int EIGHT_BYTE = 128;
 
-    private final FileInputStream _fis;
-    private final FileOutputStream _fos;
-    private final long _inputSize;
+    private boolean isEncode;
+    private String archiveName;
+    private File outputFile;
+    private FileOutputStream _fos;
 
-    public Archiver(FileInputStream _fis, FileOutputStream fos, long inputSize) {
-        this._fis = _fis;
-        this._fos = fos;
-        _inputSize = inputSize;
+    public Archiver(File input, File output, boolean isEncode) {
+        if (isEncode) {
+            outputFile = new File(getFreeArchiveName(input.getName(), output.getPath()));
+        } else {
+
+        }
     }
 
-    public long encode() throws IOException {
+
+
+    private String getFreeArchiveName(String inputName, String outPath) {
+        int additive = 1;
+        String name = inputName.split("\\.")[0];
+        inputName = name + Constants.archiveSuffix;
+        while (Files.exists(Paths.get(outPath + "\\" + inputName))) {
+            inputName = name + "(" + additive++ + ")" + Constants.archiveSuffix;
+        }
+        return outPath + "\\" + inputName;
+    }
+
+    public int getFilesCount(File file) {
+        int count = 0;
+        File[] folderEntries = file.listFiles();
+        if (folderEntries == null) {
+            return 1;
+        }
+        for (File entry : folderEntries) {
+            count += getFilesCount(entry);
+        }
+        return count;
+    }
+
+    public void encode() {
+        File[] folderEntries = outputFile.listFiles();
+
+    }
+
+
+
+    public long encodeFile(FileInputStream fis, FileOutputStream fos, long inputSize) throws IOException {
         long total = 0;
         ArrayList<Byte> bytes = new ArrayList<>();
-        byte first = (byte) _fis.read();
+        byte first = (byte) fis.read();
         byte buff = 0;
         boolean skip = false;
         int i = 1;
-        while (i <= _inputSize) {
+        while (i <= inputSize) {
             int count = 0;
             if (!skip) {
-                buff = (byte) _fis.read(); i++;
+                buff = (byte) fis.read(); i++;
             }
             if (first == buff) {
                 count++;
                 while (first == buff && count < 129) {
                     count++;
-                    if (i > _inputSize) {
+                    if (i > inputSize) {
                         break;
                     }
-                    buff = (byte) _fis.read(); i++;
+                    buff = (byte) fis.read(); i++;
                 }
                 skip = false;
-                _fos.write((byte) ((byte) (count - 2) | EIGHT_BYTE));
-                _fos.write(first);
-//                bytes.add((byte) ((byte) (count - 2) | EIGHT_BYTE));
-//                bytes.add(first);
+                fos.write((byte) ((byte) (count - 2) | EIGHT_BYTE));
+                fos.write(first);
                 total += 2;
                 first = buff;
             } else {
@@ -54,38 +86,36 @@ public class Archiver {
                     count++;
                     cache.add(first);
                     first = buff;
-                    if (i > _inputSize) {
+                    if (i > inputSize) {
                         break;
                     }
-                    buff = (byte) _fis.read(); i++;
+                    buff = (byte) fis.read(); i++;
                 }
                 skip = true;
                 total += cache.size() + 1;
-                _fos.write((byte) ((byte) (count - 1) & SEVEN_BYTES_MASK));
-                _fos.write(byteListToByteArray(cache));
-//                bytes.add((byte) ((byte) (count - 1) & SEVEN_BYTES_MASK));
-//                bytes.addAll(cache);
+                fos.write((byte) ((byte) (count - 1) & SEVEN_BYTES_MASK));
+                fos.write(byteListToByteArray(cache));
             }
         }
         return total;
     }
 
-    public long decode() throws IOException {
+    public long decode(FileInputStream fis, FileOutputStream fos, long inputSize) throws IOException {
         long total = 0;
         int i = 0;
-        while (i < _inputSize) {
-            byte countByte = (byte) _fis.read(); i++;
+        while (i < inputSize) {
+            byte countByte = (byte) fis.read(); i++;
             if ((countByte | SEVEN_BYTES_MASK) == (byte) 255) {
                 int count = Byte.toUnsignedInt((byte) (countByte & SEVEN_BYTES_MASK));
-                byte buff = (byte) _fis.read(); i++;
+                byte buff = (byte) fis.read(); i++;
                 for (int j = 0; j < count + 2; j++) {
-                    _fos.write(buff);
+                    fos.write(buff);
                     total++;
                 }
             } else {
                 int count = Byte.toUnsignedInt(countByte);
                 for (int j = 0; j < count + 1; j++) {
-                    _fos.write(_fis.read());  i++;
+                    fos.write(fis.read());  i++;
                     total++;
                 }
             }
@@ -93,7 +123,7 @@ public class Archiver {
         return total;
     }
 
-    public boolean Save() {
+    public boolean Save(FileOutputStream _fos) {
         try {
             _fos.flush();
         } catch (IOException e) {

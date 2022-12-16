@@ -1,5 +1,9 @@
 package my.archiver;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 public class Validator {
 
     private boolean isEncode;
@@ -27,8 +31,37 @@ public class Validator {
         }
     }
 
+    private boolean isInputExists() {
+        return Files.exists(Paths.get(inputPath));
+    }
+
+    private boolean isOutputIsDirectory() {
+        return Files.isDirectory(Paths.get(outputPath));
+    }
+
+    private boolean isInputIsArchive() {
+        return Paths.get(inputPath).endsWith(Constants.archiveSuffix);
+    }
+
     public boolean Validate() {
-        return exceptionMessage == null;
+        if (exceptionMessage != null) {
+            return false;
+        }
+        if (!isInputExists()) {
+            exceptionMessage = "Input does not exists.";
+            return false;
+        }
+        if (!isOutputIsDirectory()) {
+            exceptionMessage = "Output must be folder (directory).";
+            return false;
+        }
+        if (!isEncode) {
+            if (!isInputIsArchive()) {
+                exceptionMessage = "Input must be an archive.";
+                return false;
+            }
+        }
+        return true;
     }
 
     public boolean isEncode() {
